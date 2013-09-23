@@ -1,4 +1,5 @@
 from __future__ import with_statement
+import warnings
 
 import tempfile
 from datetime import datetime
@@ -43,6 +44,7 @@ class ImportMixin(object):
     change_list_template = 'admin/import_export/change_list_import.html'
     #: template for import view
     import_template_name = 'admin/import_export/import.html'
+
     #: resource class
     resource_class = None
 
@@ -69,6 +71,7 @@ class ImportMixin(object):
         return my_urls + urls
 
     def get_resource_class(self):
+        warnings.warn("Deprecation", DeprecationWarning)
         if not self.resource_class:
             return modelresource_factory(self.model)
         else:
@@ -76,7 +79,7 @@ class ImportMixin(object):
 
     def get_import_resource_class(self):
         if not self.import_resource_class:
-            return self.get_resource_class()
+            return modelresource_factory(self.model)
         else:
             return self.import_resource_class
 
@@ -92,7 +95,7 @@ class ImportMixin(object):
         wishes to import)
         '''
         opts = self.model._meta
-        resource = self.get_resource_class()()
+        resource = self.get_import_resource_class()()
 
         confirm_form = ConfirmImportForm(request.POST)
         if confirm_form.is_valid():
@@ -177,7 +180,7 @@ class ExportMixin(object):
     """
     Export mixin.
     """
-    #: resource class
+    #: resource class DEPRECATE
     resource_class = None
     #: export resource class
     export_resource_class = None
@@ -203,6 +206,7 @@ class ExportMixin(object):
         return my_urls + urls
 
     def get_resource_class(self):
+        warnings.warn("Deprecation", DeprecationWarning)
         if not self.resource_class:
             return modelresource_factory(self.model)
         else:
@@ -210,7 +214,7 @@ class ExportMixin(object):
 
     def get_export_resource_class(self):
         if not self.export_resource_class:
-            return self.get_resource_class()
+            return modelresource_factory(self.model)
         else:
             return self.export_resource_class
 
