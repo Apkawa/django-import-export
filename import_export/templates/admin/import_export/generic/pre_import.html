@@ -1,0 +1,161 @@
+{% extends "admin/import_export/base.html" %}
+{% load url from future %}
+{% load i18n %}
+{% load admin_urls %}
+{% load import_export_tags %}
+{% block extrahead %}{{ block.super }}
+<script type="text/javascript" src="{% url 'admin:jsi18n' %}"></script>
+{{ media }}
+{% endblock %}
+
+{% block breadcrumbs_last %}
+    {% trans "Import" %}
+
+{% endblock %}
+
+{% block content %}
+    <h1>{% trans "Import" %}</h1>
+
+    {% if confirm_form %}
+        <form id="id_confirm_form" action="../import/" method="POST">
+            {% csrf_token %}
+            {{ confirm_form.as_p }}
+            <p>
+                {% trans "Below is a preview of data to be imported. If you are satisfied with the results, click 'Confirm import'" %}
+            </p>
+
+            <div class="submit-row">
+                <input type="submit" class="default" name="confirm" value="{% trans "Confirm import" %}">
+            </div>
+        </form>
+    {% else %}
+        <form action="{{ form_url }}" method="post" id="{{ opts.module_name }}_form" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <p>
+                {% trans "This importer will import the following fields: " %}
+                {% for f in choice_fields.values %}
+                    {% if forloop.counter0 %}
+                        ,
+                    {% endif %}
+                    <tt>{{ f }}</tt>
+                {% endfor %}
+            </p>
+
+            <fieldset class="module aligned">
+                {% for field in form %}
+                    <div class="form-row">
+                        {{ field.errors }}
+
+                        {{ field.label_tag }}
+
+                        {{ field }}
+
+                        {% if field.field.help_text %}
+                            <p class="help">{{ field.field.help_text|safe }}</p>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </fieldset>
+
+            <div class="submit-row">
+                <input type="submit" class="default" value="{% trans "Submit" %}">
+            </div>
+        </form>
+    {% endif %}
+
+    {% if dataset %}
+        <table id="dataset">
+
+            <script type="text/javascript">
+                (function ($) {
+                    function load_import_rule(import_rule) {
+                        var dataset = $("#dataset");
+                        for (var name in import_rule) {
+                            if (import_rule.hasOwnProperty(name)) {
+                                dataset.find("select[name='" + name + "']").val(import_rule[name]);
+                            }
+                        }
+                    }
+
+                    var STORAGE_RULE_KEY = "import_waybill_{{ header_hash }}";
+
+                    var FIELDS = [
+                        {% for value in fields %}
+                            "{{ value }}"{% if not forloop.last %},{% endif %}
+                        {% endfor %} ];
+
+                    // .
+                    var PREDEFINED_FIELD_MAP = {
+                        {% for key, value in predefined_field_rules %}
+                            import_waybill_{{ key }}: "{{ value }}"{% if not forloop.last %},{% endif %}
+                        {% endfor %}
+                    };
+
+                    $(function () {
+                        var rule = PREDEFINED_FIELD_MAP[STORAGE_RULE_KEY] || localStorage.getItem(STORAGE_RULE_KEY) || "{}";
+                        load_import_rule(JSON.parse(rule));
+                        $("#dataset").find("select").bind("change", function () {
+                            var value = $(this).val();
+                            if (!value) {
+                                return true;
+                            }
+                            var exists = $("#dataset").find("select[name!='"
+                                    + this.name
+                                    + "'] option:selected[value='"
+                                    + value
+                                    + "']");
+                            if (exists.length > 0) {
+                                alert(value + " уже выбрано для столбца \"" + exists.parent()[0].name + "\"!");
+                                $(this).val("");
+                                return false;
+                            }
+                            return true;
+                        });
+
+                        $("#id_confirm_form").submit(
+                                function (event) {
+                                    var selected = $("#dataset").find("select option:selected[value!='']");
+                                    var import_rule = {};
+                                    for (var i = 0; i < selected.length; i++) {
+                                        import_rule[selected[i].parentElement.name] = selected[i].value;
+                                    }
+
+                                    json_str = JSON.stringify(import_rule);
+                                    $("#id_import_rule").val(json_str);
+                                    localStorage.setItem(STORAGE_RULE_KEY, json_str);
+                                    return true;
+                                }
+                        )
+
+                    });
+                })(django.jQuery)
+            </script>
+            <tr>
+
+                {% for cell in dataset.headers %}
+                    <th>{{ cell }}</th>
+                {% endfor %}
+            </tr>
+            <tr>
+                {% for cell in dataset.headers %}
+                    <th>
+                        <select name="{{ cell }}" id="head_{{ cell }}">
+                            <option value="">-------</option>
+                            {% for value, name in choice_fields.items %}
+                                <option value="{{ value }}">{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </th>
+                {% endfor %}
+            </tr>
+            {% for row in dataset.dict %}
+                <tr>
+                    {% for cell in row.values %}
+                        <td>{{ cell }}</td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+{% endblock %}

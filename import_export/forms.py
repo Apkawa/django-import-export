@@ -1,6 +1,7 @@
 from django import forms
 from django.utils.translation import ugettext_lazy as _
 
+from json_field.forms import JSONFormField
 
 class ImportForm(forms.Form):
     import_file = forms.FileField(
@@ -25,6 +26,10 @@ class ImportForm(forms.Form):
 class ConfirmImportForm(forms.Form):
     import_file_name = forms.CharField(widget=forms.HiddenInput())
     input_format = forms.CharField(widget=forms.HiddenInput())
+
+
+class PreImportForm(ConfirmImportForm):
+    import_rule = JSONFormField(widget=forms.HiddenInput)
 
 
 class ExportForm(forms.Form):

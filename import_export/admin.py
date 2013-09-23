@@ -1,22 +1,25 @@
 from __future__ import with_statement
+import hashlib
+import json
 import warnings
 
 import tempfile
 from datetime import datetime
 
 from django.contrib import admin
+from django.utils.encoding import smart_str
 from django.utils.translation import ugettext_lazy as _
 from django.conf.urls import patterns, url
 from django.template.response import TemplateResponse
 from django.contrib import messages
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden
 from django.core.urlresolvers import reverse
 
 from .forms import (
     ImportForm,
     ConfirmImportForm,
     ExportForm,
-)
+    PreImportForm)
 from .resources import (
     modelresource_factory,
 )
@@ -121,6 +124,7 @@ class ImportMixin(object):
                           (opts.app_label, opts.module_name),
                           current_app=self.admin_site.name)
             return HttpResponseRedirect(url)
+        return HttpResponseForbidden()
 
     def import_action(self, request, *args, **kwargs):
         '''
@@ -171,16 +175,187 @@ class ImportMixin(object):
         context['form'] = form
         context['opts'] = self.model._meta
         context['fields'] = [f.column_name for f in resource.get_fields()]
+        context['media'] = self.media + form.media
 
         return TemplateResponse(request, [self.import_template_name],
                                 context, current_app=self.admin_site.name)
+
+
+class GenericImportMixin(ImportMixin):
+    '''
+    Add import mapping file step
+    '''
+    change_list_template = 'admin/import_export/generic/change_list.html'
+
+    pre_import_template_name = 'admin/import_export/generic/pre_import.html'
+    import_template_name = 'admin/import_export/generic/import.html'
+
+    #: predefined field rules for generic format. as example [('Primary Key', 'id'), ('Book name', 'name'), ('author email', 'author_email')]
+    predefined_field_rules = None
+
+    @staticmethod
+    def header_hash(headers):
+        return hashlib.sha1('|'.join(headers)).hexdigest()
+
+    def get_urls(self):
+        info = self.model._meta.app_label, self.model._meta.module_name
+        urls = ImportMixin.get_urls(self)
+        my_urls = patterns(
+            '',
+            url(r'^pre_import/$',
+                self.admin_site.admin_view(self.pre_import_action),
+                name='%s_%s_pre_import' % info),
+        )
+        return my_urls + urls
+
+    def get_predefined_field_rules_json_map(self):
+        '''
+        return {'sha1hash of headers': 'jsob_string'}
+
+        '''
+        predefined_rules = {}
+        if self.predefined_field_rules is None:
+            return predefined_rules
+        for rule in self.predefined_field_rules:
+            rule_hash = self.header_hash(headers=[header for header, field in rule])
+            predefined_rules[rule_hash] = json.dumps(dict(rule))
+        return predefined_rules
+
+
+    def convert_dataset_by_rule(self, dataset, rule, **kwargs):
+        """
+
+        :param dataset: Dataset
+        :param rule: {
+            'Column name': 'resource_field',
+        }
+        :return:
+        """
+        rule = {smart_str(k): smart_str(v) for k, v in rule.items()}
+        resource = self.get_import_resource_class()()
+        dataset.headers = map(smart_str, dataset.headers)
+
+        delete_headers = [h for h in dataset.headers if h not in rule]
+
+        for header in delete_headers:
+            del dataset[header]
+
+        dataset.headers = [rule[h] for h in dataset.headers if h in rule]
+
+        return dataset
+
+    def import_action(self, request, *args, **kwargs):
+        '''
+        Perform a dry_run of the import to make sure the import will not
+        result in errors.  If there where no error, save the the user
+        uploaded file to a local temp file that will be used by
+        'process_import' for the actual import.
+        '''
+        resource = self.get_import_resource_class()()
+        context = {}
+        confirm_form = PreImportForm(request.POST)
+
+        if confirm_form.is_valid():
+            import_formats = self.get_import_formats()
+            input_format = import_formats[
+                int(confirm_form.cleaned_data['input_format'])
+            ]()
+            import_file = open(confirm_form.cleaned_data['import_file_name'],
+                input_format.get_read_mode())
+            import_rule = confirm_form.cleaned_data['import_rule']
+
+            data = import_file.read()
+            if not input_format.is_binary() and self.from_encoding:
+                data = smart_str(data, self.from_encoding)
+            dataset = input_format.create_dataset(data)
+            dataset = self.convert_dataset_by_rule(dataset, import_rule, **kwargs)
+
+            with tempfile.NamedTemporaryFile(delete=False) as uploaded_file:
+                uploaded_file.write(getattr(dataset, input_format.get_format().title))
+
+            result = resource.import_data(dataset, dry_run=True,
+                raise_errors=False)
+
+            context['result'] = result
+
+            if not result.has_errors():
+                context['confirm_form'] = ConfirmImportForm(initial={
+                    'import_file_name': uploaded_file.name,
+                    'input_format': confirm_form.cleaned_data['input_format'],
+                })
+
+            context['opts'] = self.model._meta
+            context['fields'] = [f.column_name for f in resource.get_fields()]
+            context['predefined_field_rules'] = self.predefined_field_rules
+
+            return TemplateResponse(request, [self.import_template_name],
+                context, current_app=self.admin_site.name)
+
+        return HttpResponseForbidden()
+
+    def pre_import_action(self, request, *args, **kwargs):
+        """
+
+        :return:
+        """
+        resource = self.get_import_resource_class()()
+
+        context = {}
+
+        import_formats = self.get_import_formats()
+        form = ImportForm(import_formats,
+            request.POST or None,
+            request.FILES or None,
+        )
+
+        if request.POST and form.is_valid():
+            input_format = import_formats[
+                int(form.cleaned_data['input_format'])
+            ]()
+            import_file = form.cleaned_data['import_file']
+            # first always write the uploaded file to disk as it may be a
+            # memory file or else based on settings upload handlers
+            with tempfile.NamedTemporaryFile(delete=False) as uploaded_file:
+                for chunk in import_file.chunks():
+                    uploaded_file.write(chunk)
+
+            # then read the file, using the proper format-specific mode
+            with open(uploaded_file.name,
+                    input_format.get_read_mode()) as uploaded_import_file:
+                # warning, big files may exceed memory
+                data = uploaded_import_file.read()
+
+            if not input_format.is_binary() and self.from_encoding:
+                data = smart_str(data, self.from_encoding)
+
+            dataset = input_format.create_dataset(data)
+            dataset.headers = map(smart_str, dataset.headers)
+
+            context['dataset'] = dataset
+            context['header_hash'] = self.header_hash(dataset.headers)
+
+            context['confirm_form'] = PreImportForm(initial={
+                'import_file_name': uploaded_file.name,
+                'input_format': form.cleaned_data['input_format'],
+                })
+
+        context["choice_fields"] = resource.get_fields_display_map()
+        context['predefined_field_rules'] = self.get_predefined_field_rules_json_map()
+
+        context['form'] = form
+        context['opts'] = self.model._meta
+        context['fields'] = [f.column_name for f in resource.get_fields()]
+        context['media'] = self.media + form.media
+
+        return TemplateResponse(request, [self.pre_import_template_name],
+            context, current_app=self.admin_site.name)
 
 
 class ExportMixin(object):
     """
     Export mixin.
     """
-    #: resource class DEPRECATE
+    #: resource class
     resource_class = None
     #: export resource class
     export_resource_class = None
@@ -274,6 +449,7 @@ class ExportMixin(object):
         context = {}
         context['form'] = form
         context['opts'] = self.model._meta
+        context['media'] = self.media + form.media
         return TemplateResponse(request, [self.export_template_name],
                                 context, current_app=self.admin_site.name)
 

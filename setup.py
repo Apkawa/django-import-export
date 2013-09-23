@@ -16,6 +16,7 @@ install_requires = [
     'tablib',
     'Django>=1.4.2',
     'diff-match-patch',
+    'django-json-field',
 ]
 
 setup(

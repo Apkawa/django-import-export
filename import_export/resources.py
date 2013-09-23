@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import functools
 from copy import deepcopy
 import sys
@@ -51,6 +52,8 @@ class ResourceOptions(object):
       transactions. Default value is ``None`` meaning
       ``settings.IMPORT_EXPORT_USE_TRANSACTIONS`` will be evaluated.
 
+    * ``fields_display_map`` - is list of pairs (field_name, display_name)
+
     """
     fields = None
     model = None
@@ -60,6 +63,7 @@ class ResourceOptions(object):
     export_order = None
     widgets = None
     use_transactions = None
+    fields_display_map = None
 
     def __new__(cls, meta=None):
         overrides = {}
@@ -122,6 +126,20 @@ class Resource(object):
                 return field_name
         raise AttributeError("Field %s does not exists in %s resource" % (
             field, cls))
+
+    def get_fields_display_map(self):
+        '''
+        Returns OrderedDict display fields
+        '''
+        if not self._meta.fields_display_map:
+            return OrderedDict((f.column_name, f.column_name) for f in self.get_fields())
+        else:
+            fields_map = OrderedDict(self._meta.fields_display_map)
+            for field in self.get_fields():
+                field_name = field.column_name
+                if field_name not in fields_map:
+                    fields_map[field_name] = field_name
+            return fields_map
 
     def init_instance(self, row=None):
         raise NotImplementedError()
@@ -317,7 +335,8 @@ class Resource(object):
         return [self.export_field(field, obj) for field in self.get_fields()]
 
     def get_export_headers(self):
-        headers = [field.column_name for field in self.get_fields()]
+        fields_display_map = self.get_fields_display_map()
+        headers = [fields_display_map.get(field.column_name) or field.column_name for field in self.get_fields()]
         return headers
 
     def export(self, queryset=None):
