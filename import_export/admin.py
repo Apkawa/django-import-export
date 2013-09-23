@@ -45,6 +45,10 @@ class ImportMixin(object):
     import_template_name = 'admin/import_export/import.html'
     #: resource class
     resource_class = None
+
+    #: import resource_class
+    import_resource_class = None
+
     #: available import formats
     formats = DEFAULT_FORMATS
     #: import data encoding
@@ -69,6 +73,12 @@ class ImportMixin(object):
             return modelresource_factory(self.model)
         else:
             return self.resource_class
+
+    def get_import_resource_class(self):
+        if not self.import_resource_class:
+            return self.get_resource_class()
+        else:
+            return self.import_resource_class
 
     def get_import_formats(self):
         """
@@ -116,7 +126,7 @@ class ImportMixin(object):
         uploaded file to a local temp file that will be used by
         'process_import' for the actual import.
         '''
-        resource = self.get_resource_class()()
+        resource = self.get_import_resource_class()()
 
         context = {}
 
@@ -169,6 +179,9 @@ class ExportMixin(object):
     """
     #: resource class
     resource_class = None
+    #: export resource class
+    export_resource_class = None
+
     #: template for change_list view
     change_list_template = 'admin/import_export/change_list_export.html'
     #: template for export view
@@ -194,6 +207,12 @@ class ExportMixin(object):
             return modelresource_factory(self.model)
         else:
             return self.resource_class
+
+    def get_export_resource_class(self):
+        if not self.export_resource_class:
+            return self.get_resource_class()
+        else:
+            return self.export_resource_class
 
     def get_export_formats(self):
         """
@@ -236,7 +255,7 @@ class ExportMixin(object):
                 int(form.cleaned_data['file_format'])
             ]()
 
-            resource_class = self.get_resource_class()
+            resource_class = self.get_export_resource_class()
             queryset = self.get_export_queryset(request)
             data = resource_class().export(queryset)
             response = HttpResponse(
