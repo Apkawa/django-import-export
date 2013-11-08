@@ -12,7 +12,9 @@ from django.utils.translation import ugettext_lazy as _
 from django.conf.urls import patterns, url
 from django.template.response import TemplateResponse
 from django.contrib import messages
-from django.http import HttpResponseRedirect, HttpResponse, HttpResponseForbidden
+from django.http import (HttpResponseRedirect,
+                         HttpResponse,
+                         HttpResponseForbidden)
 from django.core.urlresolvers import reverse
 
 from .forms import (
@@ -22,7 +24,7 @@ from .forms import (
     PreImportForm)
 from .resources import (
     modelresource_factory,
-)
+    )
 from .formats import base_formats
 
 
@@ -59,15 +61,17 @@ class ImportMixin(object):
     #: import data encoding
     from_encoding = "utf-8"
 
+    pattern_prefix = ''
+
     def get_urls(self):
         urls = super(ImportMixin, self).get_urls()
         info = self.model._meta.app_label, self.model._meta.module_name
         my_urls = patterns(
             '',
-            url(r'^process_import/$',
+            url(r'^process_import/$'.format(self.pattern_prefix),
                 self.admin_site.admin_view(self.process_import),
                 name='%s_%s_process_import' % info),
-            url(r'^import/$',
+            url(r'^{}import/$'.format(self.pattern_prefix),
                 self.admin_site.admin_view(self.import_action),
                 name='%s_%s_import' % info),
         )
@@ -107,14 +111,14 @@ class ImportMixin(object):
                 int(confirm_form.cleaned_data['input_format'])
             ]()
             import_file = open(confirm_form.cleaned_data['import_file_name'],
-                               input_format.get_read_mode())
+                input_format.get_read_mode())
             data = import_file.read()
             if not input_format.is_binary() and self.from_encoding:
                 data = unicode(data, self.from_encoding).encode('utf-8')
             dataset = input_format.create_dataset(data)
 
             resource.import_data(dataset, dry_run=False,
-                                 raise_errors=True)
+                raise_errors=True)
 
             success_message = _('Import finished')
             messages.success(request, success_message)
@@ -122,7 +126,7 @@ class ImportMixin(object):
 
             url = reverse('admin:%s_%s_changelist' %
                           (opts.app_label, opts.module_name),
-                          current_app=self.admin_site.name)
+                current_app=self.admin_site.name)
             return HttpResponseRedirect(url)
         return HttpResponseForbidden()
 
@@ -139,13 +143,12 @@ class ImportMixin(object):
 
         import_formats = self.get_import_formats()
         form = ImportForm(import_formats,
-                          request.POST or None,
-                          request.FILES or None)
+            request.POST or None,
+            request.FILES or None)
 
         if request.POST and form.is_valid():
             input_format = import_formats[
-                int(form.cleaned_data['input_format'])
-            ]()
+                int(form.cleaned_data['input_format'])]()
             import_file = form.cleaned_data['import_file']
             # first always write the uploaded file to disk as it may be a
             # memory file or else based on settings upload handlers
@@ -155,14 +158,14 @@ class ImportMixin(object):
 
             # then read the file, using the proper format-specific mode
             with open(uploaded_file.name,
-                      input_format.get_read_mode()) as uploaded_import_file:
+                    input_format.get_read_mode()) as uploaded_import_file:
                 # warning, big files may exceed memory
                 data = uploaded_import_file.read()
                 if not input_format.is_binary() and self.from_encoding:
                     data = unicode(data, self.from_encoding).encode('utf-8')
                 dataset = input_format.create_dataset(data)
                 result = resource.import_data(dataset, dry_run=True,
-                                              raise_errors=False)
+                    raise_errors=False)
 
             context['result'] = result
 
@@ -178,7 +181,7 @@ class ImportMixin(object):
         context['media'] = self.media + form.media
 
         return TemplateResponse(request, [self.import_template_name],
-                                context, current_app=self.admin_site.name)
+            context, current_app=self.admin_site.name)
 
 
 class GenericImportMixin(ImportMixin):
@@ -202,7 +205,7 @@ class GenericImportMixin(ImportMixin):
         urls = ImportMixin.get_urls(self)
         my_urls = patterns(
             '',
-            url(r'^pre_import/$',
+            url(r'^{}pre_import/$'.format(self.pattern_prefix),
                 self.admin_site.admin_view(self.pre_import_action),
                 name='%s_%s_pre_import' % info),
         )
@@ -217,10 +220,20 @@ class GenericImportMixin(ImportMixin):
         if self.predefined_field_rules is None:
             return predefined_rules
         for rule in self.predefined_field_rules:
-            rule_hash = self.header_hash(headers=[header for header, field in rule])
+            rule_hash = self.header_hash(
+                headers=[header for header, field in rule])
             predefined_rules[rule_hash] = json.dumps(dict(rule))
         return predefined_rules
 
+    def pre_convert_dataset(self, dataset, rule, **kwargs):
+        """
+
+        :param dataset: Dataset
+        :param rule: {
+            'Column name': 'resource_field',
+        }
+        :return:
+        """
 
     def convert_dataset_by_rule(self, dataset, rule, **kwargs):
         """
@@ -233,16 +246,41 @@ class GenericImportMixin(ImportMixin):
         """
         rule = {smart_str(k): smart_str(v) for k, v in rule.items()}
         resource = self.get_import_resource_class()()
-        dataset.headers = map(smart_str, dataset.headers)
+        resource_fields = resource.fields.keys()
 
-        delete_headers = [h for h in dataset.headers if h not in rule]
+
+        dataset.headers = map(smart_str, dataset.headers)
+        delete_headers = [h for h in dataset.headers if h not in rule and h not in resource_fields]
 
         for header in delete_headers:
             del dataset[header]
-
-        dataset.headers = [rule[h] for h in dataset.headers if h in rule]
+        new_headers = []
+        for h in dataset.headers:
+            if h in rule:
+                new_headers.append(rule[h])
+            elif h in resource_fields:
+                new_headers.append(h)
+        dataset.headers = new_headers
 
         return dataset
+
+    def post_convert_dataset(self, dataset, rule, **kwargs):
+        """
+
+        :param dataset: Dataset
+        :param rule: {
+            'Column name': 'resource_field',
+        }
+        :return:
+        """
+        resource = self.get_import_resource_class()()
+
+        empty_fields = set(resource.fields.keys()) ^ set(dataset.headers)
+
+        for f in empty_fields:
+            dataset.insert_col(0, (lambda row: ''), header=f)
+
+
 
     def import_action(self, request, *args, **kwargs):
         '''
@@ -268,10 +306,14 @@ class GenericImportMixin(ImportMixin):
             if not input_format.is_binary() and self.from_encoding:
                 data = smart_str(data, self.from_encoding)
             dataset = input_format.create_dataset(data)
-            dataset = self.convert_dataset_by_rule(dataset, import_rule, **kwargs)
+            self.pre_convert_dataset(dataset, import_rule, **kwargs)
+            dataset = self.convert_dataset_by_rule(dataset, import_rule,
+                **kwargs)
+            self.post_convert_dataset(dataset, import_rule, **kwargs)
 
             with tempfile.NamedTemporaryFile(delete=False) as uploaded_file:
-                uploaded_file.write(getattr(dataset, input_format.get_format().title))
+                uploaded_file.write(
+                    getattr(dataset, input_format.get_format().title))
 
             result = resource.import_data(dataset, dry_run=True,
                 raise_errors=False)
@@ -337,10 +379,11 @@ class GenericImportMixin(ImportMixin):
             context['confirm_form'] = PreImportForm(initial={
                 'import_file_name': uploaded_file.name,
                 'input_format': form.cleaned_data['input_format'],
-                })
+            })
 
+        predefined_field_rules = self.get_predefined_field_rules_json_map()
         context["choice_fields"] = resource.get_fields_display_map()
-        context['predefined_field_rules'] = self.get_predefined_field_rules_json_map()
+        context['predefined_field_rules'] = predefined_field_rules
 
         context['form'] = form
         context['opts'] = self.model._meta
@@ -418,11 +461,11 @@ class ExportMixin(object):
 
         ChangeList = self.get_changelist(request)
         cl = ChangeList(request, self.model, list_display,
-                        list_display_links, self.list_filter,
-                        self.date_hierarchy, self.search_fields,
-                        self.list_select_related, self.list_per_page,
-                        self.list_max_show_all, self.list_editable,
-                        self)
+            list_display_links, self.list_filter,
+            self.date_hierarchy, self.search_fields,
+            self.list_select_related, self.list_per_page,
+            self.list_max_show_all, self.list_editable,
+            self)
 
         return cl.query_set
 
@@ -451,7 +494,7 @@ class ExportMixin(object):
         context['opts'] = self.model._meta
         context['media'] = self.media + form.media
         return TemplateResponse(request, [self.export_template_name],
-                                context, current_app=self.admin_site.name)
+            context, current_app=self.admin_site.name)
 
 
 class ImportExportMixin(ImportMixin, ExportMixin):

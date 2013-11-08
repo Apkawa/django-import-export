@@ -4,8 +4,8 @@
 {% load admin_urls %}
 {% load import_export_tags %}
 {% block extrahead %}{{ block.super }}
-<script type="text/javascript" src="{% url 'admin:jsi18n' %}"></script>
-{{ media }}
+    <script type="text/javascript" src="{% url 'admin:jsi18n' %}"></script>
+    {{ media }}
 {% endblock %}
 
 {% block breadcrumbs_last %}
@@ -25,11 +25,13 @@
             </p>
 
             <div class="submit-row">
-                <input type="submit" class="default" name="confirm" value="{% trans "Confirm import" %}">
+                <input type="submit" class="default" name="confirm"
+                       value="{% trans "Confirm import" %}">
             </div>
         </form>
     {% else %}
-        <form action="{{ form_url }}" method="post" id="{{ opts.module_name }}_form" enctype="multipart/form-data">
+        <form action="{{ form_url }}" method="post"
+              id="{{ opts.module_name }}_form" enctype="multipart/form-data">
             {% csrf_token %}
 
             <p>
@@ -59,7 +61,8 @@
             </fieldset>
 
             <div class="submit-row">
-                <input type="submit" class="default" value="{% trans "Submit" %}">
+                <input type="submit" class="default"
+                       value="{% trans "Submit" %}">
             </div>
         </form>
     {% endif %}
@@ -69,6 +72,7 @@
 
             <script type="text/javascript">
                 (function ($) {
+
                     function load_import_rule(import_rule) {
                         var dataset = $("#dataset");
                         for (var name in import_rule) {
@@ -79,22 +83,19 @@
                     }
 
                     var STORAGE_RULE_KEY = "import_waybill_{{ header_hash }}";
-
                     var FIELDS = [
                         {% for value in fields %}
                             "{{ value }}"{% if not forloop.last %},{% endif %}
                         {% endfor %} ];
 
-                    // .
                     var PREDEFINED_FIELD_MAP = {
-                        {% for key, value in predefined_field_rules %}
-                            import_waybill_{{ key }}: "{{ value }}"{% if not forloop.last %},{% endif %}
-                        {% endfor %}
+                        //TODO fill from resource
                     };
 
                     $(function () {
                         var rule = PREDEFINED_FIELD_MAP[STORAGE_RULE_KEY] || localStorage.getItem(STORAGE_RULE_KEY) || "{}";
                         load_import_rule(JSON.parse(rule));
+
                         $("#dataset").find("select").bind("change", function () {
                             var value = $(this).val();
                             if (!value) {
@@ -106,7 +107,7 @@
                                     + value
                                     + "']");
                             if (exists.length > 0) {
-                                alert(value + " уже выбрано для столбца \"" + exists.parent()[0].name + "\"!");
+                                alert(value + " already selected for column \"" + exists.parent()[0].name + "\"!");
                                 $(this).val("");
                                 return false;
                             }
@@ -120,6 +121,10 @@
                                     for (var i = 0; i < selected.length; i++) {
                                         import_rule[selected[i].parentElement.name] = selected[i].value;
                                     }
+                                    if (!Object.keys(import_rule).length) {
+                                        alert("Please select column");
+                                        return false;
+                                    }
 
                                     json_str = JSON.stringify(import_rule);
                                     $("#id_import_rule").val(json_str);
@@ -129,7 +134,7 @@
                         )
 
                     });
-                })(django.jQuery)
+                })(django.jQuery);
             </script>
             <tr>
 
