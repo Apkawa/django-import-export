@@ -83,17 +83,16 @@ class ImportMixin(object):
         return my_urls + urls
 
     def get_resource_class(self):
-        warnings.warn("Deprecation", DeprecationWarning)
         if not self.resource_class:
             return modelresource_factory(self.model)
         else:
             return self.resource_class
 
     def get_import_resource_class(self):
-        if not self.import_resource_class:
-            return modelresource_factory(self.model)
-        else:
-            return self.import_resource_class
+        """
+        Returns ResourceClass to use for export.
+        """
+        return self.get_resource_class()
 
     def get_import_formats(self):
         """
@@ -426,7 +425,6 @@ class ExportMixin(object):
         return my_urls + urls
 
     def get_resource_class(self):
-        warnings.warn("Deprecation", DeprecationWarning)
         if not self.resource_class:
             return modelresource_factory(self.model)
         else:
@@ -437,12 +435,6 @@ class ExportMixin(object):
         Returns ResourceClass to use for export.
         """
         return self.get_resource_class()
-
-    def get_export_resource_class(self):
-        if not self.export_resource_class:
-            return modelresource_factory(self.model)
-        else:
-            return self.export_resource_class
 
     def get_export_formats(self):
         """
