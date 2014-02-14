@@ -149,10 +149,6 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
             return OrderedDict((f.column_name, f.column_name) for f in self.get_fields())
         else:
             fields_map = OrderedDict(self._meta.fields_display_map)
-            for field in self.get_fields():
-                field_name = field.column_name
-                if field_name not in fields_map:
-                    fields_map[field_name] = field_name
             return fields_map
 
     def init_instance(self, row=None):

@@ -153,10 +153,10 @@ class XLS(TablibFormat):
         """
         Create dataset from first sheet.
         """
-        assert base_formats.XLS_IMPORT
+        assert XLS_IMPORT
 
-        xls_book = base_formats.xlrd.open_workbook(file_contents=in_stream)
-        dataset = base_formats.tablib.Dataset()
+        xls_book = xlrd.open_workbook(file_contents=in_stream)
+        dataset = tablib.Dataset()
 
         sheet = xls_book.sheets()[0]
         for i in xrange(sheet.nrows):
@@ -170,6 +170,5 @@ class XLS(TablibFormat):
                     if cell.ctype in (2, 3) and int(cell_value) == cell_value:
                         cell_value = int(cell_value)
                     row.append(cell_value)
-
                 dataset.append(row)
         return dataset
