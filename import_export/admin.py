@@ -27,6 +27,11 @@ from .resources import (
     )
 from .formats import base_formats
 
+try:
+    from django.utils.encoding import force_text
+except ImportError:
+    from django.utils.encoding import force_unicode as force_text
+
 
 #: import / export formats
 DEFAULT_FORMATS = (
@@ -114,7 +119,7 @@ class ImportMixin(object):
                 input_format.get_read_mode())
             data = import_file.read()
             if not input_format.is_binary() and self.from_encoding:
-                data = unicode(data, self.from_encoding).encode('utf-8')
+                data = force_text(data, self.from_encoding)
             dataset = input_format.create_dataset(data)
 
             resource.import_data(dataset, dry_run=False,
@@ -162,7 +167,7 @@ class ImportMixin(object):
                 # warning, big files may exceed memory
                 data = uploaded_import_file.read()
                 if not input_format.is_binary() and self.from_encoding:
-                    data = unicode(data, self.from_encoding).encode('utf-8')
+                    data = force_text(data, self.from_encoding)
                 dataset = input_format.create_dataset(data)
                 result = resource.import_data(dataset, dry_run=True,
                     raise_errors=False)
@@ -400,9 +405,6 @@ class ExportMixin(object):
     """
     #: resource class
     resource_class = None
-    #: export resource class
-    export_resource_class = None
-
     #: template for change_list view
     change_list_template = 'admin/import_export/change_list_export.html'
     #: template for export view
@@ -429,6 +431,12 @@ class ExportMixin(object):
             return modelresource_factory(self.model)
         else:
             return self.resource_class
+
+    def get_export_resource_class(self):
+        """
+        Returns ResourceClass to use for export.
+        """
+        return self.get_resource_class()
 
     def get_export_resource_class(self):
         if not self.export_resource_class:
@@ -477,6 +485,7 @@ class ExportMixin(object):
                 int(form.cleaned_data['file_format'])
             ]()
 
+            resource_class = self.get_export_resource_class()
             resource_class = self.get_export_resource_class()
             queryset = self.get_export_queryset(request)
             data = resource_class().export(queryset)

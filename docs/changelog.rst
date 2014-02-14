@@ -1,14 +1,37 @@
-===========
-Change Log
-===========
+Changelog for django-import-export
+==================================
 
-0.1.5 (unreleased)
-==================
+0.2.1 (unreleased)
+------------------
+
+- Nothing changed yet.
+
+
+0.2.0 (2014-01-30)
+------------------
+
+- Python 3 support
+
+
+0.1.6 (2014-01-21)
+------------------
+
+* Additional hooks for customizing the workflow (#61)
+
+0.1.5 (2013-11-29)
+------------------
 
 * Prevent queryset caching when exporting (#44)
 
+* Allow unchanged rows to be skipped when importing (#30)
+
+* Update tests for Django 1.6 (#57)
+
+* Allow different ``ResourceClass`` to be used in ``ImportExportModelAdmin``
+  (#49)
+
 0.1.4
-=====
+-----
 
 * Use `field_name` instead of `column_name` for field dehydration, FIX #36
 
@@ -18,14 +41,14 @@ Change Log
 * FIX #23 - export filter not working
 
 0.1.3
-=====
+-----
 
 * Fix packaging
 
 * DB transactions support for importing data
 
 0.1.2
-=====
+-----
 
 * support for deleting objects during import
 
@@ -36,7 +59,7 @@ Change Log
 * added documentation
 
 0.1.1
-=====
+-----
 
 * added ExportForm to admin integration for choosing export file format
 
@@ -48,6 +71,6 @@ Change Log
 * bugfixes
 
 0.1.0
-=====
+-----
 
 * Refactor api
