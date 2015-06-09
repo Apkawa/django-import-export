@@ -1,4 +1,5 @@
 from __future__ import unicode_literals
+import tempfile
 
 import warnings
 import tablib
@@ -15,6 +16,20 @@ except ImportError:
         "import support for 'xls' format and xlrd module is not found."
         warnings.warn(xls_warning, ImportWarning)
         XLS_IMPORT = False
+
+try:
+    from tablib.compat import openpyxl
+    XLSX_IMPORT = True
+except ImportError:
+    try:
+        import openpyxl
+        XLSX_IMPORT = True
+    except:
+        xls_warning = "Installed `tablib` library does not include"
+        "import support for 'xlsx' format and openpyxl module is not found."
+        warnings.warn(xls_warning, ImportWarning)
+        XLSX_IMPORT = False
+
 
 from django.utils.importlib import import_module
 from django.utils import six
@@ -135,10 +150,6 @@ class ODS(TextFormat):
     TABLIB_MODULE = 'tablib.formats._ods'
 
 
-class XLSX(TextFormat):
-    TABLIB_MODULE = 'tablib.formats._xlsx'
-
-
 class HTML(TextFormat):
     TABLIB_MODULE = 'tablib.formats._html'
 
@@ -170,5 +181,45 @@ class XLS(TablibFormat):
                     if cell.ctype in (2, 3) and int(cell_value) == cell_value:
                         cell_value = int(cell_value)
                     row.append(cell_value)
+                dataset.append(row)
+        return dataset
+
+
+class XLSX(TablibFormat):
+    TABLIB_MODULE = 'tablib.formats._xlsx'
+
+    def can_import(self):
+        return XLSX_IMPORT
+
+    def create_dataset(self, in_stream):
+        """
+        Create dataset from first sheet.
+        """
+        assert XLSX_IMPORT
+
+        with tempfile.NamedTemporaryFile(suffix='.xlsx') as tf:
+            tf.file.write(in_stream)
+            tf.file.close()
+            xls_book = openpyxl.reader.excel.load_workbook(tf.name)
+
+        dataset = tablib.Dataset()
+
+        sheet = xls_book.worksheets[0]
+        dataset.title = sheet.title
+
+        for i, row in enumerate(sheet.rows):
+            row_vals = [c.value for c in row]
+            if i == 0:
+                dataset.headers = row_vals
+            else:
+                row = []
+                for c in xrange(sheet.get_highest_column()):
+                    cell = sheet.cell(row=i, column=c)
+                    cell_value = cell.value
+
+                    if cell.data_type == cell.TYPE_NUMERIC and int(cell_value) == cell_value:
+                        cell_value = int(cell_value)
+                    row.append(cell_value)
+
                 dataset.append(row)
         return dataset
