@@ -217,7 +217,10 @@ class XLSX(TablibFormat):
                     cell = sheet.cell(row=i, column=c)
                     cell_value = cell.value
 
-                    if cell.data_type == cell.TYPE_NUMERIC and int(cell_value) == cell_value:
+
+                    if (cell.data_type == cell.TYPE_NUMERIC
+                            and isinstance(cell_value, (int, float, basestring))
+                            and int(cell_value) == cell_value):
                         cell_value = int(cell_value)
                     row.append(cell_value)
 
