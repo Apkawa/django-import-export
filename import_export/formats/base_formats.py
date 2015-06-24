@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 import tempfile
 
 import warnings
+import datetime
 import tablib
 
 try:
@@ -178,8 +179,17 @@ class XLS(TablibFormat):
                 for c in xrange(sheet.ncols):
                     cell = sheet.cell(i, c)
                     cell_value = cell.value
-                    if cell.ctype in (2, 3) and int(cell_value) == cell_value:
+
+                    if cell.ctype == xlrd.XL_CELL_NUMBER and int(cell_value) == cell_value:
                         cell_value = int(cell_value)
+
+                    elif cell.ctype == xlrd.XL_CELL_DATE:
+                        dt_tuple = xlrd.xldate_as_tuple(cell_value, xls_book.datemode)
+                        # Create datetime object from this tuple.
+                        cell_value = datetime.datetime(
+                            dt_tuple[0], dt_tuple[1], dt_tuple[2],
+                            dt_tuple[3], dt_tuple[4], dt_tuple[5]
+                        )
                     row.append(cell_value)
                 dataset.append(row)
         return dataset
