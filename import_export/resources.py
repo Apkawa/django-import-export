@@ -11,7 +11,12 @@ from django.utils.safestring import mark_safe
 from django.utils.datastructures import SortedDict
 from django.utils import six
 from django.db import transaction
-from django.db.models.related import RelatedObject
+
+try:
+    from django.db.models.related import RelatedObject
+except ImportError:
+    from django.db.models.fields.related import ForeignObjectRel as RelatedObject
+
 from django.conf import settings
 
 from .results import Error, Result, RowResult
