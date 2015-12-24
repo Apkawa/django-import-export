@@ -1,4 +1,6 @@
 from __future__ import unicode_literals
+import random
+import string
 
 from django.db import models
 from django.utils.encoding import python_2_unicode_compatible
@@ -29,7 +31,7 @@ class Book(models.Model):
     imported = models.BooleanField(default=False)
     published = models.DateField('Published', blank=True, null=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True,
-            blank=True)
+                                blank=True)
     categories = models.ManyToManyField(Category, blank=True)
 
     def __str__(self):
@@ -38,7 +40,22 @@ class Book(models.Model):
 
 class Profile(models.Model):
     user = models.OneToOneField('auth.User')
+    is_private = models.BooleanField(default=True)
 
 
 class Entry(models.Model):
     user = models.ForeignKey('auth.User')
+
+
+class WithDefault(models.Model):
+    name = models.CharField('Default', max_length=75, blank=True,
+                            default=lambda: 'foo_bar')
+
+
+class WithDynamicDefault(models.Model):
+    def random_name():
+        chars = string.ascii_lowercase
+        return ''.join(random.SystemRandom().choice(chars) for _ in range(100))
+
+    name = models.CharField('Dyn Default', max_length=100,
+            default=random_name)

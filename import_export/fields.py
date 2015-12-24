@@ -3,6 +3,8 @@ from __future__ import unicode_literals
 from . import widgets
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models.manager import Manager
+from django.db.models.fields import NOT_PROVIDED
 
 
 class Field(object):
@@ -21,11 +23,15 @@ class Field(object):
 
     ``readonly`` boolean value defines that if this field will be assigned
     to object during import.
+
+    ``default`` value returned by :meth`clean` if returned value evaluates to
+    False
     """
 
     def __init__(self, attribute=None, column_name=None, widget=None,
-            readonly=False):
+                 default=None, readonly=False):
         self.attribute = attribute
+        self.default = default
         self.column_name = column_name
         if not widget:
             widget = widgets.Widget()
@@ -47,8 +53,23 @@ class Field(object):
         Takes value stored in the data for the field and returns it as
         appropriate python object.
         """
-        value = data[self.column_name]
-        value = self.widget.clean(value)
+        try:
+            value = data[self.column_name]
+        except KeyError:
+            raise KeyError("Column '%s' not found in dataset. Available "
+                           "columns are: %s" % (self.column_name,
+                                                list(data.keys())))
+
+        try:
+            value = self.widget.clean(value)
+        except ValueError as e:
+            raise ValueError("Column '%s': %s" % (self.column_name, e))
+
+        if not value and self.default != NOT_PROVIDED:
+            if callable(self.default):
+                return self.default()
+            return self.default
+
         return value
 
     def get_value(self, obj):
@@ -63,7 +84,7 @@ class Field(object):
 
         for attr in attrs:
             try:
-                value = getattr(value, attr)
+                value = getattr(value, attr, None)
             except (ValueError, ObjectDoesNotExist):
                 # needs to have a primary key value before a many-to-many
                 # relationship can be used.
@@ -71,7 +92,9 @@ class Field(object):
             if value is None:
                 return None
 
-        if callable(value):
+        # RelatedManager and ManyRelatedManager classes are callable in
+        # Django >= 1.7 but we don't want to call them
+        if callable(value) and not isinstance(value, Manager):
             value = value()
         return value
 
@@ -80,7 +103,10 @@ class Field(object):
         Cleans this field value and assign it to provided object.
         """
         if not self.readonly:
-            setattr(obj, self.attribute, self.clean(data))
+            attrs = self.attribute.split('__')
+            for attr in attrs[:-1]:
+                obj = getattr(obj, attr, None)
+            setattr(obj, attrs[-1], self.clean(data))
 
     def export(self, obj):
         """
