@@ -100,7 +100,7 @@ class ResourceOptions(object):
     * ``report_skipped`` - Controls if the result reports skipped rows
       Default value is True
 
-    * ``fields_display_map`` - is list of pairs (field_name, display_name)
+    * ``fields_display`` - is list of pairs (field_name, display_name)
 
     """
     fields = None
@@ -111,7 +111,7 @@ class ResourceOptions(object):
     export_order = None
     widgets = None
     use_transactions = None
-    fields_display_map = None
+    fields_display = None
     skip_unchanged = False
     report_skipped = True
 
@@ -185,14 +185,14 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         raise AttributeError("Field %s does not exists in %s resource" % (
             field, cls))
 
-    def get_fields_display_map(self):
+    def get_fields_display(self):
         '''
         Returns OrderedDict display fields
         '''
-        if not self._meta.fields_display_map:
+        if not self._meta.fields_display:
             return OrderedDict((f.column_name, f.column_name) for f in self.get_fields())
         else:
-            fields_map = OrderedDict(self._meta.fields_display_map)
+            fields_map = OrderedDict(self._meta.fields_display)
             return fields_map
 
     def init_instance(self, row=None):
@@ -439,7 +439,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         return [self.export_field(field, obj) for field in self.get_fields()]
 
     def get_export_headers(self):
-        fields_display_map = self.get_fields_display_map()
+        fields_display_map = self.get_fields_display()
         headers = [
             force_text(
             fields_display_map.get(field.column_name)

@@ -31,7 +31,7 @@ from .forms import (
 )
 from .resources import (
     modelresource_factory,
-    )
+)
 from .results import RowResult
 from .tmp_storages import TempFolderStorage
 
@@ -42,7 +42,7 @@ except ImportError:
 
 SKIP_ADMIN_LOG = getattr(settings, 'IMPORT_EXPORT_SKIP_ADMIN_LOG', False)
 TMP_STORAGE_CLASS = getattr(settings, 'IMPORT_EXPORT_TMP_STORAGE_CLASS',
-                            TempFolderStorage)
+        TempFolderStorage)
 if isinstance(TMP_STORAGE_CLASS, six.string_types):
     try:
         # Nod to tastypie's use of importlib.
@@ -120,11 +120,11 @@ class ImportMixin(ImportExportMixinBase):
         info = self.get_model_info()
         my_urls = [
             url(r'^process_import/$',
-                self.admin_site.admin_view(self.process_import),
-                name='%s_%s_process_import' % info),
+                    self.admin_site.admin_view(self.process_import),
+                    name='%s_%s_process_import' % info),
             url(r'^{}import/$'.format(self.pattern_prefix),
-                self.admin_site.admin_view(self.import_action),
-                name='%s_%s_import' % info),
+                    self.admin_site.admin_view(self.import_action),
+                    name='%s_%s_import' % info),
         ]
         return my_urls + urls
 
@@ -138,7 +138,9 @@ class ImportMixin(ImportExportMixinBase):
         """
         Returns ResourceClass to use for export.
         """
-        return self.get_resource_class()
+        if not self.import_resource_class:
+            return self.get_resource_class()
+        return self.import_resource_class
 
     def get_import_formats(self):
         """
@@ -167,9 +169,9 @@ class ImportMixin(ImportExportMixinBase):
             dataset = input_format.create_dataset(data)
 
             result = resource.import_data(dataset, dry_run=False,
-                                          raise_errors=True,
-                                          file_name=confirm_form.cleaned_data['original_file_name'],
-                                          user=request.user)
+                    raise_errors=True,
+                    file_name=confirm_form.cleaned_data['original_file_name'],
+                    user=request.user)
 
             if not self.get_skip_admin_log():
                 # Add imported objects to LogEntry
@@ -182,12 +184,12 @@ class ImportMixin(ImportExportMixinBase):
                 for row in result:
                     if row.import_type != row.IMPORT_TYPE_SKIP:
                         LogEntry.objects.log_action(
-                            user_id=request.user.pk,
-                            content_type_id=content_type_id,
-                            object_id=row.object_id,
-                            object_repr=row.object_repr,
-                            action_flag=logentry_map[row.import_type],
-                            change_message="%s through import_export" % row.import_type,
+                                user_id=request.user.pk,
+                                content_type_id=content_type_id,
+                                object_id=row.object_id,
+                                object_repr=row.object_repr,
+                                action_flag=logentry_map[row.import_type],
+                                change_message="%s through import_export" % row.import_type,
                         )
 
             success_message = _('Import finished')
@@ -195,7 +197,7 @@ class ImportMixin(ImportExportMixinBase):
             tmp_storage.remove()
 
             url = reverse('admin:%s_%s_changelist' % self.get_model_info(),
-                          current_app=self.admin_site.name)
+                    current_app=self.admin_site.name)
             return HttpResponseRedirect(url)
         return HttpResponseForbidden()
 
@@ -212,8 +214,8 @@ class ImportMixin(ImportExportMixinBase):
 
         import_formats = self.get_import_formats()
         form = ImportForm(import_formats,
-            request.POST or None,
-            request.FILES or None)
+                request.POST or None,
+                request.FILES or None)
 
         if request.POST and form.is_valid():
             input_format = import_formats[
@@ -240,9 +242,9 @@ class ImportMixin(ImportExportMixinBase):
             except Exception as e:
                 return HttpResponse(_(u"<h1>%s encountred while trying to read file: %s</h1>" % (type(e).__name__, e)))
             result = resource.import_data(dataset, dry_run=True,
-                                          raise_errors=False,
-                                          file_name=import_file.name,
-                                          user=request.user)
+                    raise_errors=False,
+                    file_name=import_file.name,
+                    user=request.user)
 
             context['result'] = result
 
@@ -264,7 +266,7 @@ class ImportMixin(ImportExportMixinBase):
         context['media'] = self.media + form.media
 
         return TemplateResponse(request, [self.import_template_name],
-                                context, current_app=self.admin_site.name)
+                context, current_app=self.admin_site.name)
 
 
 class GenericImportMixin(ImportMixin):
@@ -281,15 +283,15 @@ class GenericImportMixin(ImportMixin):
 
     @staticmethod
     def header_hash(headers):
-        return hashlib.sha1('|'.join(headers)).hexdigest()
+        return hashlib.sha1('|'.join(map(smart_str, headers))).hexdigest()
 
     def get_urls(self):
         info = self.get_model_info()
         urls = ImportMixin.get_urls(self)
         my_urls = [
             url(r'^{}pre_import/$'.format(self.pattern_prefix),
-                self.admin_site.admin_view(self.pre_import_action),
-                name='%s_%s_pre_import' % info),
+                    self.admin_site.admin_view(self.pre_import_action),
+                    name='%s_%s_pre_import' % info),
         ]
         return my_urls + urls
 
@@ -303,7 +305,7 @@ class GenericImportMixin(ImportMixin):
             return predefined_rules
         for rule in self.predefined_field_rules:
             rule_hash = self.header_hash(
-                headers=[header for header, field in rule])
+                    headers=[header for header, field in rule])
             predefined_rules[rule_hash] = json.dumps(dict(rule))
         return predefined_rules
 
@@ -329,7 +331,6 @@ class GenericImportMixin(ImportMixin):
         rule = {smart_str(k): smart_str(v) for k, v in rule.items()}
         resource = self.get_import_resource_class()()
         resource_fields = resource.fields.keys()
-
 
         dataset.headers = map(smart_str, dataset.headers)
         delete_headers = [h for h in dataset.headers if h not in rule and h not in resource_fields]
@@ -375,7 +376,7 @@ class GenericImportMixin(ImportMixin):
 
         import_formats = self.get_import_formats()
         form = PreImportForm(request.POST or None,
-                request.FILES or None)
+                             request.FILES or None)
 
         if request.POST and form.is_valid():
             input_format = import_formats[
@@ -411,6 +412,9 @@ class GenericImportMixin(ImportMixin):
             context['result'] = result
 
             if not result.has_errors():
+                tmp_storage = self.get_tmp_storage_class()()
+                tmp_storage.save(input_format.export_data(dataset), input_format.get_read_mode())
+
                 context['confirm_form'] = ConfirmImportForm(initial={
                     'import_file_name': tmp_storage.name,
                     'original_file_name': form.cleaned_data['original_file_name'],
@@ -466,28 +470,22 @@ class GenericImportMixin(ImportMixin):
                 return HttpResponse(_(u"<h1>Imported file is not in unicode: %s</h1>" % e))
             except Exception as e:
                 return HttpResponse(_(u"<h1>%s encountred while trying to read file: %s</h1>" % (type(e).__name__, e)))
-            result = resource.import_data(dataset, dry_run=True,
-                    raise_errors=False,
-                    file_name=import_file.name,
-                    user=request.user)
 
             context['dataset'] = dataset
-            context['result'] = result
             context['header_hash'] = self.header_hash(dataset.headers)
 
-            if not result.has_errors():
-                context['confirm_form'] = PreImportForm(initial={
-                    'import_file_name': tmp_storage.name,
-                    'original_file_name': import_file.name,
-                    'input_format': form.cleaned_data['input_format'],
-                })
+            context['confirm_form'] = PreImportForm(initial={
+                'import_file_name': tmp_storage.name,
+                'original_file_name': import_file.name,
+                'input_format': form.cleaned_data['input_format'],
+            })
 
         if django.VERSION >= (1, 8, 0):
             context.update(self.admin_site.each_context(request))
         elif django.VERSION >= (1, 7, 0):
             context.update(self.admin_site.each_context())
 
-        context["choice_fields"] = resource.get_fields_display_map()
+        context["choice_fields"] = resource.get_fields_display()
         context['predefined_field_rules'] = self.get_predefined_field_rules_json_map()
 
         context['form'] = form
@@ -518,8 +516,8 @@ class ExportMixin(ImportExportMixinBase):
         urls = super(ExportMixin, self).get_urls()
         my_urls = [
             url(r'^export/$',
-                self.admin_site.admin_view(self.export_action),
-                name='%s_%s_export' % self.get_model_info()),
+                    self.admin_site.admin_view(self.export_action),
+                    name='%s_%s_export' % self.get_model_info()),
         ]
         return my_urls + urls
 
@@ -560,11 +558,11 @@ class ExportMixin(ImportExportMixinBase):
 
         ChangeList = self.get_changelist(request)
         cl = ChangeList(request, self.model, list_display,
-            list_display_links, self.list_filter,
-            self.date_hierarchy, self.search_fields,
-            self.list_select_related, self.list_per_page,
-            self.list_max_show_all, self.list_editable,
-            self)
+                list_display_links, self.list_filter,
+                self.date_hierarchy, self.search_fields,
+                self.list_select_related, self.list_per_page,
+                self.list_max_show_all, self.list_editable,
+                self)
 
         # query_set has been renamed to queryset in Django 1.8
         try:
@@ -613,7 +611,7 @@ class ExportMixin(ImportExportMixinBase):
         context['opts'] = self.model._meta
         context['media'] = self.media + form.media
         return TemplateResponse(request, [self.export_template_name],
-            context, current_app=self.admin_site.name)
+                context, current_app=self.admin_site.name)
 
 
 class ImportExportMixin(ImportMixin, ExportMixin):
@@ -677,8 +675,9 @@ class ExportActionModelAdmin(ExportMixin, admin.ModelAdmin):
                 self.get_export_filename(file_format),
             )
             return response
+
     export_admin_action.short_description = _(
-        'Export selected %(verbose_name_plural)s')
+            'Export selected %(verbose_name_plural)s')
 
     actions = [export_admin_action]
 
