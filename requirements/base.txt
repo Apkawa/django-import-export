@@ -1,5 +1,5 @@
 Django>=1.5
 tablib
 diff-match-patch
-django-json-field
+jsonfield
 openpyxl

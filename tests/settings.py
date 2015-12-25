@@ -12,7 +12,13 @@ INSTALLED_APPS = [
     'import_export',
 
     'core',
+
 ]
+
+# INSTALLED_APPS += [
+#     'debug_toolbar'
+#     'django.contrib.staticfiles'
+# ]
 
 SITE_ID = 1
 

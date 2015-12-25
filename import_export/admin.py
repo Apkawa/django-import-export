@@ -1,28 +1,27 @@
 from __future__ import with_statement
-import hashlib
-import json
-import warnings
 
+import hashlib
+import importlib
+import json
 from datetime import datetime
 
-import importlib
 import django
-from django.contrib import admin
-from django.utils.encoding import smart_str
-from django.utils import six
-from django.utils.translation import ugettext_lazy as _
+from django.conf import settings
 from django.conf.urls import url
-from django.template.response import TemplateResponse
+from django.contrib import admin
 from django.contrib import messages
 from django.contrib.admin.models import LogEntry, ADDITION, CHANGE, DELETION
 from django.contrib.contenttypes.models import ContentType
-from django.http import HttpResponseRedirect, HttpResponse
+from django.core.urlresolvers import reverse
 from django.http import (HttpResponseRedirect,
                          HttpResponse,
                          HttpResponseForbidden)
-from django.core.urlresolvers import reverse
-from django.conf import settings
+from django.template.response import TemplateResponse
+from django.utils import six
+from django.utils.encoding import smart_str
+from django.utils.translation import ugettext_lazy as _
 
+from .formats import base_formats
 from .forms import (
     ImportForm,
     ConfirmImportForm,
@@ -33,7 +32,6 @@ from .forms import (
 from .resources import (
     modelresource_factory,
     )
-from .formats import base_formats
 from .results import RowResult
 from .tmp_storages import TempFolderStorage
 
@@ -286,14 +284,13 @@ class GenericImportMixin(ImportMixin):
         return hashlib.sha1('|'.join(headers)).hexdigest()
 
     def get_urls(self):
-        info = self.model._meta.app_label, self.model._meta.module_name
+        info = self.get_model_info()
         urls = ImportMixin.get_urls(self)
-        my_urls = patterns(
-            '',
+        my_urls = [
             url(r'^{}pre_import/$'.format(self.pattern_prefix),
                 self.admin_site.admin_view(self.pre_import_action),
                 name='%s_%s_pre_import' % info),
-        )
+        ]
         return my_urls + urls
 
     def get_predefined_field_rules_json_map(self):
@@ -365,110 +362,133 @@ class GenericImportMixin(ImportMixin):
         for f in empty_fields:
             dataset.insert_col(0, (lambda row: ''), header=f)
 
-
-
     def import_action(self, request, *args, **kwargs):
         '''
         Perform a dry_run of the import to make sure the import will not
-        result in errors.  If there where no error, save the the user
+        result in errors.  If there where no error, save the user
         uploaded file to a local temp file that will be used by
         'process_import' for the actual import.
         '''
         resource = self.get_import_resource_class()()
+
         context = {}
-        confirm_form = PreImportForm(request.POST)
 
-        if confirm_form.is_valid():
-            import_formats = self.get_import_formats()
+        import_formats = self.get_import_formats()
+        form = PreImportForm(request.POST or None,
+                request.FILES or None)
+
+        if request.POST and form.is_valid():
             input_format = import_formats[
-                int(confirm_form.cleaned_data['input_format'])
-            ]()
-            import_file = open(confirm_form.cleaned_data['import_file_name'],
-                input_format.get_read_mode())
-            import_rule = confirm_form.cleaned_data['import_rule']
+                int(form.cleaned_data['input_format'])]()
 
-            data = import_file.read()
-            if not input_format.is_binary() and self.from_encoding:
-                data = smart_str(data, self.from_encoding)
-            dataset = input_format.create_dataset(data)
+            import_rule = form.cleaned_data['import_rule']
+            # first always write the uploaded file to disk as it may be a
+            # memory file or else based on settings upload handlers
+            tmp_storage = self.get_tmp_storage_class()(name=form.cleaned_data['import_file_name'])
+
+            # then read the file, using the proper format-specific mode
+            # warning, big files may exceed memory
+            try:
+                data = tmp_storage.read(input_format.get_read_mode())
+                if not input_format.is_binary() and self.from_encoding:
+                    data = force_text(data, self.from_encoding)
+                dataset = input_format.create_dataset(data)
+            except UnicodeDecodeError as e:
+                return HttpResponse(_(u"<h1>Imported file is not in unicode: %s</h1>" % e))
+            except Exception as e:
+                return HttpResponse(_(u"<h1>%s encountred while trying to read file: %s</h1>" % (type(e).__name__, e)))
+
             self.pre_convert_dataset(dataset, import_rule, **kwargs)
             dataset = self.convert_dataset_by_rule(dataset, import_rule,
-                **kwargs)
+                    **kwargs)
             self.post_convert_dataset(dataset, import_rule, **kwargs)
 
-            with tempfile.NamedTemporaryFile(delete=False) as uploaded_file:
-                uploaded_file.write(
-                    getattr(dataset, input_format.get_format().title))
-
             result = resource.import_data(dataset, dry_run=True,
-                raise_errors=False)
+                    raise_errors=False,
+                    file_name=form.cleaned_data['original_file_name'],
+                    user=request.user)
 
             context['result'] = result
 
             if not result.has_errors():
                 context['confirm_form'] = ConfirmImportForm(initial={
-                    'import_file_name': uploaded_file.name,
-                    'input_format': confirm_form.cleaned_data['input_format'],
+                    'import_file_name': tmp_storage.name,
+                    'original_file_name': form.cleaned_data['original_file_name'],
+                    'input_format': form.cleaned_data['input_format'],
                 })
 
-            context['opts'] = self.model._meta
-            context['fields'] = [f.column_name for f in resource.get_fields()]
-            context['predefined_field_rules'] = self.predefined_field_rules
+        if django.VERSION >= (1, 8, 0):
+            context.update(self.admin_site.each_context(request))
+        elif django.VERSION >= (1, 7, 0):
+            context.update(self.admin_site.each_context())
 
-            return TemplateResponse(request, [self.import_template_name],
+        context['form'] = form
+        context['opts'] = self.model._meta
+        context['fields'] = [f.column_name for f in resource.get_fields()]
+        context['media'] = self.media + form.media
+
+        return TemplateResponse(request, [self.import_template_name],
                 context, current_app=self.admin_site.name)
 
-        return HttpResponseForbidden()
-
     def pre_import_action(self, request, *args, **kwargs):
-        """
-
-        :return:
-        """
+        '''
+        '''
         resource = self.get_import_resource_class()()
 
         context = {}
 
         import_formats = self.get_import_formats()
         form = ImportForm(import_formats,
-            request.POST or None,
-            request.FILES or None,
-        )
+                request.POST or None,
+                request.FILES or None)
 
         if request.POST and form.is_valid():
             input_format = import_formats[
-                int(form.cleaned_data['input_format'])
-            ]()
+                int(form.cleaned_data['input_format'])]()
             import_file = form.cleaned_data['import_file']
             # first always write the uploaded file to disk as it may be a
             # memory file or else based on settings upload handlers
-            with tempfile.NamedTemporaryFile(delete=False) as uploaded_file:
-                for chunk in import_file.chunks():
-                    uploaded_file.write(chunk)
+            tmp_storage = self.get_tmp_storage_class()()
+            data = bytes()
+            for chunk in import_file.chunks():
+                data += chunk
+
+            tmp_storage.save(data, input_format.get_read_mode())
 
             # then read the file, using the proper format-specific mode
-            with open(uploaded_file.name,
-                    input_format.get_read_mode()) as uploaded_import_file:
-                # warning, big files may exceed memory
-                data = uploaded_import_file.read()
-
-            if not input_format.is_binary() and self.from_encoding:
-                data = smart_str(data, self.from_encoding)
-
-            dataset = input_format.create_dataset(data)
-            dataset.headers = map(smart_str, dataset.headers)
+            # warning, big files may exceed memory
+            try:
+                data = tmp_storage.read(input_format.get_read_mode())
+                if not input_format.is_binary() and self.from_encoding:
+                    data = force_text(data, self.from_encoding)
+                dataset = input_format.create_dataset(data)
+            except UnicodeDecodeError as e:
+                return HttpResponse(_(u"<h1>Imported file is not in unicode: %s</h1>" % e))
+            except Exception as e:
+                return HttpResponse(_(u"<h1>%s encountred while trying to read file: %s</h1>" % (type(e).__name__, e)))
+            result = resource.import_data(dataset, dry_run=True,
+                    raise_errors=False,
+                    file_name=import_file.name,
+                    user=request.user)
 
             context['dataset'] = dataset
+            context['result'] = result
             context['header_hash'] = self.header_hash(dataset.headers)
 
-            context['confirm_form'] = PreImportForm(initial={
-                'import_file_name': uploaded_file.name,
-                'input_format': form.cleaned_data['input_format'],
-            })
+            if not result.has_errors():
+                context['confirm_form'] = PreImportForm(initial={
+                    'import_file_name': tmp_storage.name,
+                    'original_file_name': import_file.name,
+                    'input_format': form.cleaned_data['input_format'],
+                })
 
-        predefined_field_rules = self.get_predefined_field_rules_json_map()
+        if django.VERSION >= (1, 8, 0):
+            context.update(self.admin_site.each_context(request))
+        elif django.VERSION >= (1, 7, 0):
+            context.update(self.admin_site.each_context())
+
         context["choice_fields"] = resource.get_fields_display_map()
-        context['predefined_field_rules'] = predefined_field_rules
+        context['predefined_field_rules'] = self.get_predefined_field_rules_json_map()
 
         context['form'] = form
         context['opts'] = self.model._meta
@@ -476,7 +496,7 @@ class GenericImportMixin(ImportMixin):
         context['media'] = self.media + form.media
 
         return TemplateResponse(request, [self.pre_import_template_name],
-            context, current_app=self.admin_site.name)
+                context, current_app=self.admin_site.name)
 
 
 class ExportMixin(ImportExportMixinBase):

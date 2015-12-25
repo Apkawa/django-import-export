@@ -22,20 +22,20 @@ except ImportError:
         warnings.warn(xls_warning, ImportWarning)
         XLS_IMPORT = False
 
-
 try:
     import openpyxl
+
     XLSX_IMPORT = True
 except ImportError:
     try:
         from tablib.compat import openpyxl
+
         XLSX_IMPORT = hasattr(openpyxl, 'load_workbook')
     except ImportError:
         xlsx_warning = "Installed `tablib` library does not include"
         "import support for 'xlsx' format and openpyxl module is not found."
         warnings.warn(xlsx_warning, ImportWarning)
         XLSX_IMPORT = False
-
 
 try:
     from importlib import import_module
@@ -171,8 +171,6 @@ class ODS(TextFormat):
     CONTENT_TYPE = 'application/vnd.oasis.opendocument.spreadsheet'
 
 
-
-
 class HTML(TextFormat):
     TABLIB_MODULE = 'tablib.formats._html'
     CONTENT_TYPE = 'text/html'
@@ -197,72 +195,25 @@ class XLS(TablibFormat):
         sheet = xls_book.sheets()[0]
 
         dataset.headers = sheet.row_values(0)
+
         for i in moves.range(1, sheet.nrows):
-            dataset.append(sheet.row_values(i))
-        for i in xrange(sheet.nrows):
-            if i == 0:
-                dataset.headers = sheet.row_values(0)
-            else:
-                row = []
-                for c in xrange(sheet.ncols):
-                    cell = sheet.cell(i, c)
-                    cell_value = cell.value
+            row = []
+            for c in xrange(sheet.ncols):
+                cell = sheet.cell(i, c)
+                cell_value = cell.value
 
-                    if cell.ctype == xlrd.XL_CELL_NUMBER and int(cell_value) == cell_value:
-                        cell_value = int(cell_value)
+                if cell.ctype == xlrd.XL_CELL_NUMBER and int(cell_value) == cell_value:
+                    cell_value = int(cell_value)
 
-                    elif cell.ctype == xlrd.XL_CELL_DATE:
-                        dt_tuple = xlrd.xldate_as_tuple(cell_value, xls_book.datemode)
-                        # Create datetime object from this tuple.
-                        cell_value = datetime.datetime(
+                elif cell.ctype == xlrd.XL_CELL_DATE:
+                    dt_tuple = xlrd.xldate_as_tuple(cell_value, xls_book.datemode)
+                    # Create datetime object from this tuple.
+                    cell_value = datetime.datetime(
                             dt_tuple[0], dt_tuple[1], dt_tuple[2],
                             dt_tuple[3], dt_tuple[4], dt_tuple[5]
-                        )
-                    row.append(cell_value)
-                dataset.append(row)
-        return dataset
-
-
-class XLSX(TablibFormat):
-    TABLIB_MODULE = 'tablib.formats._xlsx'
-
-    def can_import(self):
-        return XLSX_IMPORT
-
-    def create_dataset(self, in_stream):
-        """
-        Create dataset from first sheet.
-        """
-        assert XLSX_IMPORT
-
-        with tempfile.NamedTemporaryFile(suffix='.xlsx') as tf:
-            tf.file.write(in_stream)
-            tf.file.close()
-            xls_book = openpyxl.reader.excel.load_workbook(tf.name)
-
-        dataset = tablib.Dataset()
-
-        sheet = xls_book.worksheets[0]
-        dataset.title = sheet.title
-
-        for i, row in enumerate(sheet.rows):
-            row_vals = [c.value for c in row]
-            if i == 0:
-                dataset.headers = row_vals
-            else:
-                row = []
-                for c in xrange(sheet.get_highest_column()):
-                    cell = sheet.cell(row=i, column=c)
-                    cell_value = cell.value
-
-
-                    if (cell.data_type == cell.TYPE_NUMERIC
-                            and isinstance(cell_value, (int, float, basestring))
-                            and int(cell_value) == cell_value):
-                        cell_value = int(cell_value)
-                    row.append(cell_value)
-
-                dataset.append(row)
+                    )
+                row.append(cell_value)
+            dataset.append(row)
         return dataset
 
 
@@ -285,7 +236,17 @@ class XLSX(TablibFormat):
         sheet = xlsx_book.active
 
         dataset.headers = [cell.value for cell in sheet.rows[0]]
+
         for i in moves.range(1, len(sheet.rows)):
-            row_values = [cell.value for cell in sheet.rows[i]]
-            dataset.append(row_values)
+            row = []
+            for c in xrange(sheet.get_highest_column()):
+                cell = sheet.cell(row=i, column=c)
+                cell_value = cell.value
+
+                if (cell.data_type == cell.TYPE_NUMERIC
+                    and isinstance(cell_value, (int, float, basestring))
+                    and int(cell_value) == cell_value):
+                    cell_value = int(cell_value)
+                row.append(cell_value)
+            dataset.append(row)
         return dataset

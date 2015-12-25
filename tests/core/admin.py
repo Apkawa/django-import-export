@@ -14,6 +14,7 @@ class BookAdmin(ImportExportMixin, admin.ModelAdmin):
 class CategoryAdmin(ExportActionModelAdmin):
     pass
 
+
 class SomeBook(Book):
     class Meta:
         proxy = True
@@ -23,9 +24,7 @@ class GenericImportBookAdmin(GenericImportMixin, admin.ModelAdmin):
     list_filter = ['categories', 'author']
 
 
-
 admin.site.register(Book, BookAdmin)
 admin.site.register(Category, CategoryAdmin)
 admin.site.register(SomeBook, GenericImportBookAdmin)
-admin.site.register(Category)
 admin.site.register(Author)

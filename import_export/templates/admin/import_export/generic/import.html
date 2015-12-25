@@ -1,9 +1,11 @@
 {% extends "admin/import_export/base.html" %}
-{% load url from future %}
 {% load i18n %}
 {% load admin_urls %}
 {% load import_export_tags %}
 
+{% block breadcrumbs_last %}
+{% trans "Import" %}
+{% endblock %}
 
 {% block content %}
 <h1>{% trans "Import" %}</h1>
@@ -30,7 +32,7 @@
         {% if forloop.counter0 %}
         ,
         {% endif %}
-        <tt>{{ f }}</tt>
+        <code>{{ f }}</code>
       {% endfor %}
     </p>
 
@@ -62,12 +64,16 @@
     <h2>{% trans "Errors" %}</h2>
     <ul>
       {% for error in result.base_errors  %}
-      <li>{{ error.error }}</li>
+      <li>
+        {{ error.error }}
+        <div class="traceback">{{ error.traceback|linebreaks }}</div>
+      </li>
       {% endfor %}
       {% for line, errors in result.row_errors %}
         {% for error in errors %}
           <li>
             {% trans "Line number" %}: {{ line }} - {{ error.error }}
+            <div>{{ error.row }}</div>
             <div class="traceback">{{ error.traceback|linebreaks }}</div>
           </li>
         {% endfor %}
@@ -82,7 +88,7 @@
     <thead>
       <tr>
         <th></th>
-        {% for field in fields %}
+        {% for field in result.diff_headers %}
           <th>{{ field }}</th>
         {% endfor %}
       </tr>

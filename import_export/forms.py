@@ -6,7 +6,7 @@ from django import forms
 from django.contrib.admin.helpers import ActionForm
 from django.utils.translation import ugettext_lazy as _
 
-from json_field.forms import JSONFormField
+from jsonfield.fields import JSONFormField
 
 class ImportForm(forms.Form):
     import_file = forms.FileField(
