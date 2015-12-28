@@ -8,14 +8,16 @@ from django.utils.translation import ugettext_lazy as _
 
 from jsonfield.fields import JSONFormField
 
+
 class ImportForm(forms.Form):
     import_file = forms.FileField(
-        label=_('File to import')
-        )
+            label=_('File to import')
+    )
     input_format = forms.ChoiceField(
-        label=_('Format'),
-        choices=(),
-        )
+            label=_('Format'),
+            choices=(),
+            required=False,
+    )
 
     def __init__(self, import_formats, *args, **kwargs):
         super(ImportForm, self).__init__(*args, **kwargs)
@@ -26,6 +28,16 @@ class ImportForm(forms.Form):
             choices.insert(0, ('', '---'))
 
         self.fields['input_format'].choices = choices
+
+    def clean(self):
+        data = self.cleaned_data
+        if not data['input_format']:
+            input_format = os.path.splitext(data['import_file'].name.strip())[-1][1:].lower()
+            data['input_format'] = {t: i for i, t in self.fields['input_format'].choices}.get(input_format)
+
+        if not data['input_format']:
+            self.add_error('input_format', self.fields['input_format'].error_messages['required'])
+        return data
 
 
 class ConfirmImportForm(forms.Form):
@@ -45,9 +57,9 @@ class PreImportForm(ConfirmImportForm):
 
 class ExportForm(forms.Form):
     file_format = forms.ChoiceField(
-        label=_('Format'),
-        choices=(),
-        )
+            label=_('Format'),
+            choices=(),
+    )
 
     def __init__(self, formats, *args, **kwargs):
         super(ExportForm, self).__init__(*args, **kwargs)
@@ -65,12 +77,14 @@ def export_action_form_factory(formats):
     Returns an ActionForm subclass containing a ChoiceField populated with
     the given formats.
     """
+
     class _ExportActionForm(ActionForm):
         """
         Action form with export format ChoiceField.
         """
         file_format = forms.ChoiceField(
-            label=_('Format'), choices=formats, required=False)
+                label=_('Format'), choices=formats, required=False)
+
     _ExportActionForm.__name__ = str('ExportActionForm')
 
     return _ExportActionForm

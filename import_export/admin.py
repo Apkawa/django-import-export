@@ -501,6 +501,9 @@ class ExportMixin(ImportExportMixinBase):
     """
     Export mixin.
     """
+    #: export resource class
+    export_resource_class = None
+
     #: resource class
     resource_class = None
     #: template for change_list view
@@ -531,7 +534,7 @@ class ExportMixin(ImportExportMixinBase):
         """
         Returns ResourceClass to use for export.
         """
-        return self.get_resource_class()
+        return self.export_resource_class or self.get_resource_class()
 
     def get_export_formats(self):
         """
@@ -620,6 +623,14 @@ class ImportExportMixin(ImportMixin, ExportMixin):
     """
     #: template for change_list view
     change_list_template = 'admin/import_export/change_list_import_export.html'
+
+
+class GenericImportExportMixin(GenericImportMixin, ExportMixin):
+    """
+    Generic import and export mixin.
+    """
+    #: template for change_list view
+    change_list_template = 'admin/import_export/generic/change_list_import_export.html'
 
 
 class ImportExportModelAdmin(ImportExportMixin, admin.ModelAdmin):
